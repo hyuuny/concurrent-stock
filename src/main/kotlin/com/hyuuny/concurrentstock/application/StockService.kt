@@ -3,13 +3,15 @@ package com.hyuuny.concurrentstock.application
 import com.hyuuny.concurrentstock.domain.StockRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 @Service
 class StockService(
     private val stockRepository: StockRepository,
 ) {
 
-    fun decrease(id: Long, quantity: Long) {
+    @Transactional
+    @Synchronized fun decrease(id: Long, quantity: Long) {
         val existingStock = loadStock(id)
         existingStock.decrease(quantity)
         stockRepository.saveAndFlush(existingStock)
