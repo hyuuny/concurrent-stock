@@ -1,8 +1,8 @@
-package com.hyuuny.concurrentstock.application
+package com.hyuuny.concurrentstock.facade
 
 import com.hyuuny.concurrentstock.domain.Stock
 import com.hyuuny.concurrentstock.domain.StockRepository
-import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -13,12 +13,11 @@ import org.springframework.test.context.TestConstructor.AutowireMode
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 
-
 @TestConstructor(autowireMode = AutowireMode.ALL)
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-class StockServiceTest(
+class OptimisticLockStockFacadeTest(
     private val stockRepository: StockRepository,
-    private val pessimisticLockStockService: PessimisticLockStockService,
+    private val optimisticLockStockFacade: OptimisticLockStockFacade,
 ) {
 
     @BeforeEach
@@ -32,20 +31,12 @@ class StockServiceTest(
         stockRepository.deleteAll()
     }
 
-    @Test
-    fun `재고 감소`() {
-        pessimisticLockStockService.decrease(1L, 1L)
-
-        // 재고 100 - 감소 1 -> 재고 수량 99
-        val stock = stockRepository.findById(1L).orElseThrow()
-        assertThat(stock.quantity).isEqualTo(99)
-    }
-
     /**
-     * 비관적 락(Pessimistic Lock)
-     * - 실제로 데이터에 Lock 을 걸어서 정합성을 맞추는 방법
-     * - 배타적 잠금(쓰기 잠금)을 걸게되며, 다른 트랜잭션에서는 lock 이 해제되기전에 데이터를 가져갈 수 없다.
-     * - 데드락이 걸릴 수 있기때문에 주의하여 사용해야 한다.
+     * 낙관적 락(Optimistic Lock)
+     * - 실제로 Lock 을 이용하지 않고 버전을 이용함으로써 정합성을 맞추는 방법
+     * - 별도의 락을 잡지 않으므로, 비관적 락에 비해 성능상 이점은 있지만, 업데이트가 실패했을 때 재시도 로직을 직접 작성해주어야 한다.
+     * - 데이터를 읽은 후에 update 를 수행할 때 현재 내가 읽은 버전이 맞는지 확인하며 업데이트한다.
+     * - 내가 읽은 버전에서 수정사항이 생겼을 경우에는 application에서 다시 읽은후에 작업을 수행해야한다.
      */
     @Test
     fun `동시에 100개의 요청`() {
@@ -56,16 +47,14 @@ class StockServiceTest(
         for (i: Int in 0..threadCount) {
             executorService.submit {
                 try {
-                    pessimisticLockStockService.decrease(1L, 1L)
+                    optimisticLockStockFacade.decrease(1L, 1L)
                 } finally {
                     latch.countDown()
                 }
             }
         }
-            latch.await()
-            val stock = stockRepository.findById(1L).orElseThrow()
-            assertThat(stock.quantity).isEqualTo(0)
+        latch.await()
+        val stock = stockRepository.findById(1L).orElseThrow()
+        Assertions.assertThat(stock.quantity).isEqualTo(0)
     }
-
-
 }
