@@ -18,7 +18,7 @@ import java.util.concurrent.Executors
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 class StockServiceTest(
     private val stockRepository: StockRepository,
-    private val stockService: StockService,
+    private val pessimisticLockStockService: PessimisticLockStockService,
 ) {
 
     @BeforeEach
@@ -34,7 +34,7 @@ class StockServiceTest(
 
     @Test
     fun `재고 감소`() {
-        stockService.decrease(1L, 1L)
+        pessimisticLockStockService.decrease(1L, 1L)
 
         // 재고 100 - 감소 1 -> 재고 수량 99
         val stock = stockRepository.findById(1L).orElseThrow()
@@ -42,9 +42,10 @@ class StockServiceTest(
     }
 
     /**
-     * @Transactional은 트랜잭션 종료 시점에 DB에 update query를 전달한다.
-     * 그렇기 때문에 쓰레드가 업데이트되기 전의 재고 수량을 가져가서 처리하므로, 테스트가 실패한다.
-     * 만약 @Transactional을 제거하면 테스트가 성공한다.
+     * 비관적 락(Pessimistic Lock)
+     * - 실제로 데이터에 Lock 을 걸어서 정합성을 맞추는 방법
+     * - 배타적 잠금(쓰기 잠금)을 걸게되며, 다른 트랜잭션에서는 lock 이 해제되기전에 데이터를 가져갈 수 없다.
+     * - 데드락이 걸릴 수 있기때문에 주의하여 사용해야 한다.
      */
     @Test
     fun `동시에 100개의 요청`() {
@@ -55,7 +56,7 @@ class StockServiceTest(
         for (i: Int in 0..threadCount) {
             executorService.submit {
                 try {
-                    stockService.decrease(1L, 1L)
+                    pessimisticLockStockService.decrease(1L, 1L)
                 } finally {
                     latch.countDown()
                 }
