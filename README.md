@@ -22,3 +22,17 @@ docker ps
 -- mysql 접속
 docker exec -it mysql bash
 ```
+
+<br>
+
+### 도커 Redis 실행 명령어
+
+```shell
+docker pull redis
+docker run --name myredis -d -p 6379:6379 redis
+docker ps
+
+-- 레디스 cli 접속
+docker exec -it 0323b477997b(Redis 컨테이너 아이디) redis-cli
+```
+
